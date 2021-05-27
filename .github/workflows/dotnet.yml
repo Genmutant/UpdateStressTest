@@ -43,10 +43,11 @@ jobs:
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: ${{ matrix.rid }}.zip
-        asset_name: ${{ matrix.rid }}
+        asset_name: ${{ matrix.rid }}.zip
         tag: ${{ github.ref }}
 
   release:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     needs: [build]
     steps:
