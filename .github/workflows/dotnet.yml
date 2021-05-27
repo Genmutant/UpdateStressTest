@@ -43,7 +43,7 @@ jobs:
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: ${{ matrix.rid }}.zip
-        asset_name: ${{ matrix.rid }}.zip
+        asset_name: ${{ github.event.repository.name }}_${{ matrix.rid }}.zip
         tag: ${{ github.ref }}
 
 
