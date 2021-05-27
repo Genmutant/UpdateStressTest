@@ -13,20 +13,39 @@ using UpdateStressTest.Settings;
 
 namespace UpdateStressTest {
 	public class Worker : BackgroundService {
-		
-		private readonly IOptions<StressTestSettings> _stressTestSettingsOptions;
-		private readonly IServiceProvider _serviceProvider;
 		private readonly ILogger<Worker> _logger;
-
-		private int _updateCounter;
-		private int _slowCounter;
+		private readonly IServiceProvider _serviceProvider;
+		private readonly IOptionsMonitor<StressTestSettings> _stressTestSettingsOptions;
 		
-		private StressTestSettings StressTestSettings => _stressTestSettingsOptions.Value;
+		private int _slowCounter;
+		private int _updateCounter;
 
-		public Worker(IOptions<StressTestSettings> stressTestSettingsOptions, IServiceProvider serviceProvider, ILogger<Worker> logger) {
+		public Worker(IOptionsMonitor<StressTestSettings> stressTestSettingsOptions, IServiceProvider serviceProvider, ILogger<Worker> logger) {
 			_stressTestSettingsOptions = stressTestSettingsOptions;
 			_serviceProvider = serviceProvider;
 			_logger = logger;
+			_stressTestSettingsOptions.OnChange(settings =>
+				logger.LogInformation("Using new StressTestSettings: {StressTestSettings}", settings));
+		}
+
+		private StressTestSettings StressTestSettings => _stressTestSettingsOptions.CurrentValue;
+
+		private static async Task<string> AddNewRowEntry(SqlConnection con, CancellationToken cancellationToken) {
+			var testContainer = Guid.NewGuid().ToString();
+			await using var insertCommand = con.CreateCommand();
+			insertCommand.CommandText = "INSERT INTO ContainerAutoTest (Name) VALUES(@TestContainer)";
+			insertCommand.Parameters.Add(new SqlParameter("@TestContainer", SqlDbType.NVarChar, 100) {Value = testContainer});
+			await insertCommand.ExecuteNonQueryAsync(cancellationToken);
+			return testContainer;
+		}
+
+		private static async Task<SqlCommand> BuildUpdateCommand(SqlConnection con, string testContainer,
+			CancellationToken cancellationToken) {
+			var updateCommand = con.CreateCommand();
+			updateCommand.CommandText = "UPDATE ContainerAutoTest SET LastComment = 'TestEntry' WHERE Name = @TestContainer";
+			updateCommand.Parameters.Add(new SqlParameter("@TestContainer", SqlDbType.NVarChar, 100) {Value = testContainer});
+			await updateCommand.PrepareAsync(cancellationToken);
+			return updateCommand;
 		}
 
 		private async Task RunUpdates(IServiceProvider serviceProvider, CancellationToken cancellationToken) {
@@ -72,23 +91,6 @@ namespace UpdateStressTest {
 			}
 		}
 
-		private static async Task<string> AddNewRowEntry(SqlConnection con, CancellationToken cancellationToken) {
-			var testContainer = Guid.NewGuid().ToString();
-			await using var insertCommand = con.CreateCommand();
-			insertCommand.CommandText = "INSERT INTO ContainerAutoTest (Name) VALUES(@TestContainer)";
-			insertCommand.Parameters.Add(new SqlParameter("@TestContainer", SqlDbType.NVarChar, 100) {Value = testContainer});
-			await insertCommand.ExecuteNonQueryAsync(cancellationToken);
-			return testContainer;
-		}
-
-		private static async Task<SqlCommand> BuildUpdateCommand(SqlConnection con, string testContainer, CancellationToken cancellationToken) {
-			var updateCommand = con.CreateCommand();
-			updateCommand.CommandText = "UPDATE ContainerAutoTest SET LastComment = 'TestEntry' WHERE Name = @TestContainer";
-			updateCommand.Parameters.Add(new SqlParameter("@TestContainer", SqlDbType.NVarChar, 100) {Value = testContainer});
-			await updateCommand.PrepareAsync(cancellationToken);
-			return updateCommand;
-		}
-
 		private async Task PrintStats(CancellationToken cancellationToken) {
 			while (!cancellationToken.IsCancellationRequested) {
 				_logger.LogInformation("Updates: {UpdateCount}, Slows: {SlowCount}", _updateCounter, _slowCounter);
@@ -104,8 +106,7 @@ namespace UpdateStressTest {
 				tasks.Add(Task.Factory.StartNew(() => PrintStats(stoppingToken), stoppingToken));
 				var random = new Random();
 				for (var i = 0; i < concurrentTasks; i++) {
-					tasks.Add(Task.Factory.StartNew(() => RunUpdates(_serviceProvider, stoppingToken),
-						stoppingToken));
+					tasks.Add(Task.Factory.StartNew(() => RunUpdates(_serviceProvider, stoppingToken), stoppingToken));
 					// Don't start all tasks at the same time
 					await Task.Delay(TimeSpan.FromTicks(random.Next(10000)), stoppingToken);
 				}
