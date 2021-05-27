@@ -9,6 +9,10 @@
       <Content Include="appsettings.json">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </Content>
+      <None Remove="SqlStatementsForSetup\SetupSlowMemoryOptimized.sql" />
+      <Content Include="SqlStatementsForSetup\SetupSlowMemoryOptimized.sql">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </Content>
     </ItemGroup>
 
     <ItemGroup>
