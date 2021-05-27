@@ -39,4 +39,4 @@ jobs:
     - uses: actions/upload-artifact@v1
       with:
         name: Publish 
-        path: ./bin/${{ matrix.rid }}.zip
+        path: ${{ matrix.rid }}.zip
